@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Campus Venue Booking</title>
+<style>
+  body { font-family: Arial, sans-serif; background: #f2f4f8; margin: 0; padding: 16px; color: #222; }
+  .container { max-width: 900px; margin: auto; }
+  .box { background: white; border-radius: 8px; padding: 16px; margin-bottom: 16px; box-shadow: 0 1px 4px #0002; }
+  .venues, .slots, .dates { display: flex; flex-wrap: wrap; gap: 8px; }
+  button { padding: 10px 14px; border: 1px solid #ccc; border-radius: 6px; background: #fff; cursor: pointer; }
+  button.active { background: #1e3a8a; color: white; }
+  .available { background: #c8f2d8; }
+  .pending   { background: #fff0b3; cursor: not-allowed; }
+  .reserved  { background: #f7c6cc; cursor: not-allowed; }
+  .selected  { background: #1e3a8a; color: white; }
+  input[type=text], input[type=number], input[type=email], input[type=tel], select, textarea {
+    width: 100%; padding: 8px; margin: 4px 0 12px; box-sizing: border-box;
+  }
+  input[type=checkbox] { width: auto; margin: 8px 4px 8px 0; }
+  label { display: block; margin-top: 8px; font-weight: bold; }
+  hr { border: 0; border-top: 1px solid #ddd; margin: 18px 0; }
+  h3 { margin: 10px 0; color: #1e3a8a; }
+  .msg { color: green; font-weight: bold; }
+</style>
+</head>
+<body>
+<div class="container">
+  <h1>Campus Venue Booking</h1>
+
+  <!-- 1. Venue list -->
+  <div class="box">
+    <h2>Select Venue</h2>
+    <div class="venues" id="venueList"></div>
+  </div>
+
+  <!-- 2. Venue details -->
+  <div class="box" id="details"></div>
+
+  <!-- 3. Date and time slots -->
+  <div class="box">
+    <h2>Select Date and Time</h2>
+    <input type="date" id="date">
+    <p>
+      <span class="available">&nbsp;Available&nbsp;</span>
+      <span class="pending">&nbsp;Pending&nbsp;</span>
+      <span class="reserved">&nbsp;Reserved&nbsp;</span>
+    </p>
+    <div class="slots" id="slotList"></div>
+  </div>
+
+  <!-- 4. Booking form -->
+  <div class="box">
+    <h2>Booking Request</h2>
+    <form id="form">
+      <h3>Applicant Details</h3>
+      <p>Enter the student or faculty member's details.</p>
+
+      <label for="fullName">Full Name *</label>
+      <input type="text" id="fullName" required placeholder="e.g. Aarav Sharma">
+
+      <label for="studentId">Registration / Employee ID *</label>
+      <input type="text" id="studentId" required placeholder="e.g. 1260XXXX">
+
+      <label for="email">College Email *</label>
+      <input type="email" id="email" required placeholder="name@university.edu">
+
+      <label for="phone">Contact Number *</label>
+      <input type="tel" id="phone" required pattern="[0-9+ -]{10,15}" placeholder="10-digit mobile number">
+
+      <label for="department">School / Department *</label>
+      <input type="text" id="department" required placeholder="e.g. School of Computer Science">
+
+      <hr>
+      <h3>Event Details</h3>
+
+      <label for="eventName">Event Name *</label>
+      <input type="text" id="eventName" required placeholder="Enter event name">
+
+      <label for="attendance">Expected Attendance *</label>
+      <input type="number" id="attendance" min="1" required placeholder="Number of attendees">
+
+      <label>Required AV Equipment</label><br>
+      <input type="checkbox" name="av" value="Projector"> Projector
+      <input type="checkbox" name="av" value="Mic"> Mic
+      <input type="checkbox" name="av" value="Speakers"> Speakers
+      <input type="checkbox" name="av" value="Laptop"> Laptop
+
+      <br><br>
+      <button type="submit">Send Request</button>
+    </form>
+    <p class="msg" id="message"></p>
+  </div>
+</div>
+
+<script>
+  // Venue data
+  const venues = [
+    { name: "Auditorium",        seats: 500, projector: "Laser 6000 lm",  mic: "6 wireless mics",    ac: "Central AC" },
+    { name: "Mini Seminar Hall", seats: 80,  projector: "Full HD DLP",    mic: "2 handheld mics",    ac: "Split AC" },
+    { name: "Smart Classroom",   seats: 40,  projector: "Smart board 75\"", mic: "Lapel mic",         ac: "Split AC" },
+    { name: "Conference Room",   seats: 20,  projector: "4K display",     mic: "Table mic array",    ac: "Split AC" }
+  ];
+  const times = ["9:00 AM", "10:00 AM", "11:00 AM", "12:00 PM", "1:00 PM", "2:00 PM", "3:00 PM", "4:00 PM"];
+
+  let selectedVenue = 0;
+  let selectedSlot = null;
+  let myBookings = [];   // slots booked by the user in this session
+
+  const dateInput = document.getElementById("date");
+  dateInput.value = new Date().toISOString().slice(0, 10);   // default = today
+
+  // Show venue buttons
+  function showVenues() {
+    const list = document.getElementById("venueList");
+    list.innerHTML = "";
+    venues.forEach((v, i) => {
+      const btn = document.createElement("button");
+      btn.textContent = v.name;
+      if (i === selectedVenue) btn.className = "active";
+      btn.onclick = () => { selectedVenue = i; selectedSlot = null; refresh(); };
+      list.appendChild(btn);
+    });
+  }
+
+  // Show venue details card
+  function showDetails() {
+    const v = venues[selectedVenue];
+    document.getElementById("details").innerHTML =
+      `<h2>${v.name}</h2>
+       <p><b>Seating Capacity:</b> ${v.seats}</p>
+       <p><b>Projector:</b> ${v.projector}</p>
+       <p><b>Mic System:</b> ${v.mic}</p>
+       <p><b>AC:</b> ${v.ac}</p>`;
+  }
+
+  // Dummy status (replace with real data from a database later)
+  function getStatus(slotIndex) {
+    const key = selectedVenue + dateInput.value + times[slotIndex];
+    if (myBookings.includes(key)) return "pending";
+    const day = new Date(dateInput.value).getDate();
+    const n = (day + selectedVenue + slotIndex) % 6;
+    if (n === 0) return "reserved";
+    if (n === 1) return "pending";
+    return "available";
+  }
+
+  // Show time slot grid
+  function showSlots() {
+    const list = document.getElementById("slotList");
+    list.innerHTML = "";
+    times.forEach((t, i) => {
+      const status = getStatus(i);
+      const btn = document.createElement("button");
+      btn.textContent = t;
+      btn.className = (selectedSlot === i) ? "selected" : status;
+      btn.onclick = () => {
+        if (status !== "available") return alert("This slot is not available");
+        selectedSlot = i;
+        showSlots();
+      };
+      list.appendChild(btn);
+    });
+  }
+
+  function refresh() { showVenues(); showDetails(); showSlots(); }
+
+  dateInput.onchange = () => { selectedSlot = null; showSlots(); };
+
+  // Submit form
+  document.getElementById("form").onsubmit = function (e) {
+    e.preventDefault();
+    const msg = document.getElementById("message");
+    const attendance = Number(document.getElementById("attendance").value);
+
+    if (selectedSlot === null) { msg.textContent = "Please select a time slot first."; return; }
+    if (attendance > venues[selectedVenue].seats) {
+      msg.textContent = "Attendance is more than the venue capacity."; return;
+    }
+
+    const applicantName = document.getElementById("fullName").value.trim();
+    const registrationId = document.getElementById("studentId").value.trim();
+    const collegeEmail = document.getElementById("email").value.trim();
+    const contactNumber = document.getElementById("phone").value.trim();
+    const department = document.getElementById("department").value.trim();
+    const eventName = document.getElementById("eventName").value.trim();
+    const equipment = Array.from(document.querySelectorAll('input[name="av"]:checked'))
+      .map(item => item.value);
+
+    myBookings.push(selectedVenue + dateInput.value + times[selectedSlot]);
+    msg.textContent = `Request sent! Pending approval. Applicant: ${applicantName} | ID: ${registrationId} | Email: ${collegeEmail} | Contact: ${contactNumber} | Department: ${department} | Event: ${eventName} | Date: ${dateInput.value} | Time: ${times[selectedSlot]} | Attendance: ${attendance} | AV: ${equipment.join(", ") || "None"}`;
+    selectedSlot = null;
+    e.target.reset();
+    showSlots();
+  };
+
+  refresh();
+</script>
+</body>
+</html>
